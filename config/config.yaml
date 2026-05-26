@@ -1,0 +1,11 @@
+samples:
+  sample1: data/raw/sample1.fastq
+  sample2: data/raw/sample2.fastq
+
+conditions:
+  sample1: control
+  sample2: treated
+
+reference:
+  genome: data/reference/genome.fa
+  gtf: data/reference/annotation.gtf
