@@ -1,0 +1,25 @@
+# Sequencing data
+*.fastq.gz
+*.fastq
+*.sra
+
+# Alignment files
+*.bam
+*.bai
+*.sam
+
+# Large intermediate outputs
+results/alignments/
+results/trimmed/
+data/raw/
+data/trimmed/
+
+# Temporary files
+_STARtmp/
+
+# R files
+.Rhistory
+.RData
+
+# Logs
+*.log
