@@ -1,10 +1,10 @@
 samples:
-  sample1: data/raw/sample1.fastq
-  sample2: data/raw/sample2.fastq
-
-conditions:
-  sample1: control
-  sample2: treated
+  - SRR6727768
+  - SRR6727769
+  - SRR6727770
+  - SRR6727771
+  - SRR6727772
+  - SRR6727773
 
 reference:
   genome: data/reference/genome.fa
