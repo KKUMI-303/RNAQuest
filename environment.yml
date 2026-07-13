@@ -19,3 +19,4 @@ dependencies:
   - r-dplyr
   - bioconductor-deseq2
   - bioconductor-tximport
+  - tree

@@ -1,127 +1,208 @@
 configfile: "config/config.yaml"
 
 
+SAMPLES = config["samples"]
+
+
 rule all:
     input:
-        "results/differential_expression/DE_results.csv"
+        "results/differential_expression/DE_results.csv",
+        "results/multiqc/multiqc_report.html",
+        expand(
+            "results/alignments/{sample}.sorted.bam.bai",
+            sample=SAMPLES
+        )
 
-
-rule fastqc:
+# -------------------------
+# Fast QC (Pre-Trimming)
+# -------------------------
+rule fastqc_raw:
     input:
-        "data/raw/{sample}.fastq"
+        r1="data/raw/{sample}_1.fastq.gz",
+	r2="data/raw/{sample}_2.fastq.gz"
     output:
-        "results/qc/{sample}_fastqc.html"
-    threads: 2
-    log:
-        "logs/fastqc/{sample}.log"
+        html1="results/qc/raw/{sample}_1_fastqc.html",
+        zip1="results/qc/raw/{sample}_1_fastqc.zip",
+        html2="results/qc/raw/{sample}_2_fastqc.html",
+        zip2="results/qc/raw/{sample}_2_fastqc.zip"
+    threads: 4
     shell:
         """
-        fastqc {input} -o results/qc/ > {log} 2>&1
+        mkdir -p results/qc/raw
+        fastqc {input.r1} {input.r2} \
+        -o results/qc/raw \
+        --threads {threads}
         """
 
+
+# -------------------------
+# Trimming 
+# -------------------------
 rule trim:
     input:
-        r1="data/raw/{sample}_R1.fastq",
-        r2="data/raw/{sample}_R2.fastq"
+        r1="data/raw/{sample}_1.fastq.gz",
+        r2="data/raw/{sample}_2.fastq.gz"
     output:
-        r1="data/trimmed/{sample}_R1_paired.fastq",
-        r2="data/trimmed/{sample}_R2_paired.fastq",
-        r1_unpaired="data/trimmed/{sample}_R1_unpaired.fastq",
-        r2_unpaired="data/trimmed/{sample}_R2_unpaired.fastq"
-    threads: 4
-    log:
-        "logs/trimmomatic/{sample}.log"
+        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
+        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz",
+        unp1="results/trimmed/{sample}_R1.unpaired.fastq.gz",
+        unp2="results/trimmed/{sample}_R2.unpaired.fastq.gz"
+    threads: 8
     shell:
         """
-        trimmomatic PE {input.r1} {input.r2} \
-        {output.r1} {output.r1_unpaired} \
-        {output.r2} {output.r2_unpaired} \
-        SLIDINGWINDOW:4:20 MINLEN:50 \
-        > {log} 2>&1
+        trimmomatic PE \
+            -threads {threads} \
+	    -phred33 \
+            {input.r1} {input.r2} \
+            {output.r1} {output.unp1} \
+            {output.r2} {output.unp2} \
+            SLIDINGWINDOW:4:20 MINLEN:50
         """
-
-
-rule star_index:
+# -------------------------
+# Fast QC (Post-Trimming)
+# -------------------------
+rule fastqc_trimmed:
     input:
-        genome=config["reference"]["genome"],
-        gtf=config["reference"]["gtf"]
+        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
+        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz"
     output:
-        directory("data/reference/star_index")
+        html1="results/qc/trimmed/{sample}_R1.trimmed_fastqc.html",
+        html2="results/qc/trimmed/{sample}_R2.trimmed_fastqc.html",
+        zip1="results/qc/trimmed/{sample}_R1.trimmed_fastqc.zip",
+        zip2="results/qc/trimmed/{sample}_R2.trimmed_fastqc.zip"
     threads: 4
-    log:
-        "logs/star_index.log"
     shell:
         """
-        STAR --runMode genomeGenerate \
-        --genomeDir data/reference/star_index \
-        --genomeFastaFiles {input.genome} \
-        --sjdbGTFfile {input.gtf} \
-        --runThreadN {threads} \
+        mkdir -p results/qc/trimmed
+
+        fastqc {input.r1} {input.r2} \
+            --outdir results/qc/trimmed \
+            --threads {threads}
+        """
+
+# -------------------------
+# HISAT2 index
+# -------------------------
+rule hisat2_index:
+    input:
+        config["reference"]["genome"]
+    output:
+        directory("data/reference/hisat2_index")
+    threads: 4
+    log:
+        "logs/hisat2_index.log"
+    shell:
+        """
+        mkdir -p data/reference/hisat2_index logs
+
+        hisat2-build {input} data/reference/hisat2_index/mouse_index \
         > {log} 2>&1
         """
 
 
-
+# -------------------------
+# HISAT2 alignment
+# -------------------------
 rule align:
     input:
-        r1="data/trimmed/{sample}_R1_paired.fastq",
-        r2="data/trimmed/{sample}_R2_paired.fastq",
-        index="data/reference/star_index"
+        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
+        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz", 
+	index=rules.hisat2_index.output
     output:
-        "results/alignments/{sample}_Aligned.out.sam"
+        bam="results/alignments/{sample}.sorted.bam",
+	bai="results/alignments/{sample}.sorted.bam.bai"
     threads: 4
-    log:
-        "logs/star/{sample}.log"
     shell:
         """
-        STAR --genomeDir {input.index} \
-        --readFilesIn {input.r1} {input.r2} \
-        --outFileNamePrefix results/alignments/{wildcards.sample}_ \
-        --outSAMtype SAM \
-        --runThreadN {threads} \
-        > {log} 2>&1
+        hisat2 \
+            -x data/reference/hisat2_index/mouse_index \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            -p {threads} \
+        | samtools sort \
+            -@ {threads} \
+            -o {output.bam}
+
+	samtools index {output.bam}
         """
 
+# -------------------------
+# flagstat alignment QC
+# -------------------------
 
-
-rule bam_sort:
+rule flagstat:
     input:
-        "results/alignments/{sample}_Aligned.out.sam"
+        "results/alignments/{sample}.sorted.bam"
     output:
-        bam="results/alignments/{sample}.sorted.bam"
-    threads: 2
+        "results/qc/alignment/{sample}.flagstat.txt"
     log:
-        "logs/samtools/{sample}.log"
+        "logs/flagstat/{sample}.log"
     shell:
         """
-        samtools view -Sb {input} | samtools sort -o {output.bam}
-        samtools index {output.bam} > {log} 2>&1
+        mkdir -p results/qc/alignment logs/flagstat
+
+        samtools flagstat {input} > {output}
+
+        echo "Done" > {log}
         """
 
+# -------------------------
+# featureCounts (fixed BAM input handling)
+# -------------------------
 rule featurecounts:
     input:
-        bam=expand(
-            "results/alignments/{sample}.sorted.bam",
-            sample=config["samples"]
-        ),
+        bams=expand("results/alignments/{sample}.sorted.bam", sample=SAMPLES),
         gtf=config["reference"]["gtf"]
     output:
-        "results/counts/gene_counts.txt"
+        "results/counts/gene_counts.txt",
+        "results/counts/gene_counts.txt.summary"
     threads: 4
-    log:
-        "logs/featurecounts.log"
     shell:
         """
-        featureCounts -T {threads} -a {input.gtf} -o {output} {input.bam} \
-        > {log} 2>&1
+        mkdir -p results/counts logs
+
+        featureCounts -T {threads} \
+	-p \
+        -a {input.gtf} \
+        -o results/counts/gene_counts.txt \
+        -t exon \
+        -g gene_id \
+        {input.bams}
         """
 
+
+# -------------------------
+# deseq2 Analysis
+# -------------------------
 rule deseq2:
     input:
-        "results/counts/gene_counts.txt"
+        counts="results/counts/gene_counts.txt",
+	metadata="metadata/samples.csv"
     output:
         "results/differential_expression/DE_results.csv"
     log:
         "logs/deseq2.log"
     script:
-        "../scripts/deseq2_analysis.R"
+        "scripts/deseq2_analysis.R"
+
+# -------------------------
+# MultiQC
+# -------------------------
+rule multiqc:
+    input:
+        expand("results/qc/raw/{sample}_1_fastqc.zip", sample=SAMPLES),
+        expand("results/qc/raw/{sample}_2_fastqc.zip", sample=SAMPLES),
+        expand("results/qc/trimmed/{sample}_R1.trimmed_fastqc.zip", sample=SAMPLES),
+        expand("results/qc/trimmed/{sample}_R2.trimmed_fastqc.zip", sample=SAMPLES),
+        expand("results/qc/alignment/{sample}.flagstat.txt", sample=SAMPLES),
+        "results/counts/gene_counts.txt"
+    output:
+        "results/multiqc/multiqc_report.html"
+    shell:
+        """
+        mkdir -p results/multiqc logs
+
+        multiqc results \
+            -o results/multiqc \
+            > logs/multiqc.log 2>&1
+        """
