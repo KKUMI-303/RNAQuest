@@ -1,0 +1,17 @@
+reference:
+  genome: data/reference/genome.fa
+  gtf: data/reference/annotation.gtf
+  hisat2_index: data/reference/hisat2_index
+
+paths:
+  raw: tests/data/raw/mock
+  results: tests/results
+  logs: tests/logs
+  metadata: tests/metadata/samples.csv
+
+deseq2:
+  reference_condition: ConditionA
+  comparison_condition: ConditionB
+
+scripts:
+  test_script: tests/scripts
