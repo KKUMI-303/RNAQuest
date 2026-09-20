@@ -17,7 +17,7 @@ dependencies:
   - r-base=4.3
   - r-ggplot2
   - r-dplyr
-  - r-heatmap
+  - r-pheatmap
   - r-matrixstats
   - bioconductor-deseq2
   - bioconductor-tximport
