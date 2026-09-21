@@ -23,10 +23,10 @@ make_mock() {
     gzip "$OUT/${sample}_R2.fastq"
 }
 
-make_mock "Conditon_A_1" "SRR24142039" 101
-make_mock "Conditon_A_2" "SRR24142040" 102
-make_mock "Conditon_A_3" "SRR24142041" 103
+make_mock "ConditonA1" "SRR24142039" 101
+make_mock "ConditonA2" "SRR24142040" 102
+make_mock "ConditonA3" "SRR24142041" 103
 
-make_mock "Condition_B_1" "SRR24142033" 104
-make_mock "Condition_B_2" "SRR24142034" 105
-make_mock "Condition_B_3" "SRR24142035" 106
+make_mock "ConditionB1" "SRR24142033" 104
+make_mock "ConditionB2" "SRR24142034" 105
+make_mock "ConditionB3" "SRR24142035" 106
