@@ -243,7 +243,8 @@ rule multiqc:
         mkdir -p {RESULTS}/multiqc {LOGS}
 
         multiqc {RESULTS} \
-            -o {RESULTS}/multiqc \
+            --outdir {RESULTS}/multiqc \
+            --filename multiqc_report.html \
+            --force \
             > {log} 2>&1
         """
-
