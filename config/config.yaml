@@ -1,11 +1,13 @@
-samples:
-  - SRR6727768
-  - SRR6727769
-  - SRR6727770
-  - SRR6727771
-  - SRR6727772
-  - SRR6727773
-
 reference:
   genome: data/reference/genome.fa
   gtf: data/reference/annotation.gtf
+  hisat2_index: data/reference/hisat2_index
+
+paths:
+  raw: tests/data/raw/
+  results: results
+  logs: logs
+
+deseq2:
+  reference_condition: Condition_A
+  comparison_condition: Condition_B

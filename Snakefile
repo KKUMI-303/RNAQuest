@@ -1,36 +1,48 @@
 configfile: "config/config.yaml"
+RAW = config["paths"]["raw"]
+RESULTS = config["paths"]["results"]
+LOGS = config["paths"]["logs"]
+HISAT2_INDEX = config["reference"]["hisat2_index"]
+META = config["paths"]["metadata"]
+SCRIPTS = config["scripts"]["test_script"]
+import csv
 
-
-SAMPLES = config["samples"]
-
-
+with open(META) as f:
+    reader = csv.DictReader(f)
+    SAMPLES = [row["sample"] for row in reader]
 rule all:
     input:
-        "results/differential_expression/DE_results.csv",
-        "results/multiqc/multiqc_report.html",
         expand(
-            "results/alignments/{sample}.sorted.bam.bai",
+            f"{RESULTS}/alignments/{{sample}}.sorted.bam.bai",
             sample=SAMPLES
-        )
+        ),
+	f"{RESULTS}/counts/gene_counts.txt",
+        f"{RESULTS}/multiqc/multiqc_report.html",
+        f"{RESULTS}/differential_expression/DE_results.csv",
+        f"{RESULTS}/differential_expression/comparison.csv",
+        f"{RESULTS}/differential_expression/PCA_conditions.pdf",
+        f"{RESULTS}/differential_expression/volcano.pdf",
+        f"{RESULTS}/differential_expression/heatmap.pdf"
+
 
 # -------------------------
 # Fast QC (Pre-Trimming)
 # -------------------------
 rule fastqc_raw:
     input:
-        r1="data/raw/{sample}_1.fastq.gz",
-	r2="data/raw/{sample}_2.fastq.gz"
+        r1=f"{RAW}/{{sample}}_1.fastq.gz",
+	r2=f"{RAW}/{{sample}}_2.fastq.gz"
     output:
-        html1="results/qc/raw/{sample}_1_fastqc.html",
-        zip1="results/qc/raw/{sample}_1_fastqc.zip",
-        html2="results/qc/raw/{sample}_2_fastqc.html",
-        zip2="results/qc/raw/{sample}_2_fastqc.zip"
+        html1=f"{RESULTS}/qc/raw/{{sample}}_1_fastqc.html",
+        zip1=f"{RESULTS}/qc/raw/{{sample}}_1_fastqc.zip",
+        html2=f"{RESULTS}/qc/raw/{{sample}}_2_fastqc.html",
+        zip2=f"{RESULTS}/qc/raw/{{sample}}_2_fastqc.zip"
     threads: 4
     shell:
         """
-        mkdir -p results/qc/raw
+        mkdir -p {RESULTS}/qc/raw
         fastqc {input.r1} {input.r2} \
-        -o results/qc/raw \
+        --outdir {RESULTS}/qc/raw \
         --threads {threads}
         """
 
@@ -40,13 +52,13 @@ rule fastqc_raw:
 # -------------------------
 rule trim:
     input:
-        r1="data/raw/{sample}_1.fastq.gz",
-        r2="data/raw/{sample}_2.fastq.gz"
+        r1=f"{RAW}/{{sample}}_1.fastq.gz",
+        r2=f"{RAW}/{{sample}}_2.fastq.gz"
     output:
-        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
-        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz",
-        unp1="results/trimmed/{sample}_R1.unpaired.fastq.gz",
-        unp2="results/trimmed/{sample}_R2.unpaired.fastq.gz"
+        r1=f"{RESULTS}/trimmed/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{RESULTS}/trimmed/{{sample}}_R2.trimmed.fastq.gz",
+        unp1=f"{RESULTS}/trimmed/{{sample}}_R1.unpaired.fastq.gz",
+        unp2=f"{RESULTS}/trimmed/{{sample}}_R2.unpaired.fastq.gz"
     threads: 8
     shell:
         """
@@ -63,20 +75,20 @@ rule trim:
 # -------------------------
 rule fastqc_trimmed:
     input:
-        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
-        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz"
+        r1=f"{RESULTS}/trimmed/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{RESULTS}/trimmed/{{sample}}_R2.trimmed.fastq.gz"
     output:
-        html1="results/qc/trimmed/{sample}_R1.trimmed_fastqc.html",
-        html2="results/qc/trimmed/{sample}_R2.trimmed_fastqc.html",
-        zip1="results/qc/trimmed/{sample}_R1.trimmed_fastqc.zip",
-        zip2="results/qc/trimmed/{sample}_R2.trimmed_fastqc.zip"
+        html1=f"{RESULTS}/qc/trimmed/{{sample}}_R1.trimmed_fastqc.html",
+        html2=f"{RESULTS}/qc/trimmed/{{sample}}_R2.trimmed_fastqc.html",
+        zip1=f"{RESULTS}/qc/trimmed/{{sample}}_R1.trimmed_fastqc.zip",
+        zip2=f"{RESULTS}/qc/trimmed/{{sample}}_R2.trimmed_fastqc.zip"
     threads: 4
     shell:
         """
-        mkdir -p results/qc/trimmed
+        mkdir -p {RESULTS}/qc/trimmed
 
         fastqc {input.r1} {input.r2} \
-            --outdir results/qc/trimmed \
+            --outdir {RESULTS}/qc/trimmed \
             --threads {threads}
         """
 
@@ -87,15 +99,15 @@ rule hisat2_index:
     input:
         config["reference"]["genome"]
     output:
-        directory("data/reference/hisat2_index")
+        directory(HISAT2_INDEX)
     threads: 4
     log:
-        "logs/hisat2_index.log"
+        f"{LOGS}/hisat2_index.log"
     shell:
         """
-        mkdir -p data/reference/hisat2_index logs
+        mkdir -p {HISAT2_INDEX} {LOGS}
 
-        hisat2-build {input} data/reference/hisat2_index/mouse_index \
+        hisat2-build {input} {HISAT2_INDEX}/mouse_index \
         > {log} 2>&1
         """
 
@@ -105,17 +117,17 @@ rule hisat2_index:
 # -------------------------
 rule align:
     input:
-        r1="results/trimmed/{sample}_R1.trimmed.fastq.gz",
-        r2="results/trimmed/{sample}_R2.trimmed.fastq.gz", 
+        r1=f"{RESULTS}/trimmed/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{RESULTS}/trimmed/{{sample}}_R2.trimmed.fastq.gz", 
 	index=rules.hisat2_index.output
     output:
-        bam="results/alignments/{sample}.sorted.bam",
-	bai="results/alignments/{sample}.sorted.bam.bai"
+        bam=f"{RESULTS}/alignments/{{sample}}.sorted.bam",
+	bai=f"{RESULTS}/alignments/{{sample}}.sorted.bam.bai"
     threads: 4
     shell:
         """
         hisat2 \
-            -x data/reference/hisat2_index/mouse_index \
+            -x {HISAT2_INDEX}/mouse_index \
             -1 {input.r1} \
             -2 {input.r2} \
             -p {threads} \
@@ -132,14 +144,14 @@ rule align:
 
 rule flagstat:
     input:
-        "results/alignments/{sample}.sorted.bam"
+        f"{RESULTS}/alignments/{{sample}}.sorted.bam"
     output:
-        "results/qc/alignment/{sample}.flagstat.txt"
+        f"{RESULTS}/qc/alignment/{{sample}}.flagstat.txt"
     log:
-        "logs/flagstat/{sample}.log"
+        f"{LOGS}/flagstat/{{sample}}.log"
     shell:
         """
-        mkdir -p results/qc/alignment logs/flagstat
+        mkdir -p {RESULTS}/qc/alignment {LOGS}/flagstat
 
         samtools flagstat {input} > {output}
 
@@ -147,24 +159,27 @@ rule flagstat:
         """
 
 # -------------------------
-# featureCounts (fixed BAM input handling)
+# featureCounts
 # -------------------------
 rule featurecounts:
     input:
-        bams=expand("results/alignments/{sample}.sorted.bam", sample=SAMPLES),
+        bams=expand(
+            f"{RESULTS}/alignments/{{sample}}.sorted.bam",
+            sample=SAMPLES
+        ),
         gtf=config["reference"]["gtf"]
     output:
-        "results/counts/gene_counts.txt",
-        "results/counts/gene_counts.txt.summary"
+        f"{RESULTS}/counts/gene_counts.txt",
+        f"{RESULTS}/counts/gene_counts.txt.summary"
     threads: 4
     shell:
         """
-        mkdir -p results/counts logs
+        mkdir -p {RESULTS}/counts {LOGS}
 
         featureCounts -T {threads} \
-	-p \
+        -p \
         -a {input.gtf} \
-        -o results/counts/gene_counts.txt \
+        -o {RESULTS}/counts/gene_counts.txt \
         -t exon \
         -g gene_id \
         {input.bams}
@@ -172,37 +187,64 @@ rule featurecounts:
 
 
 # -------------------------
-# deseq2 Analysis
+# DESeq2 Analysis
 # -------------------------
 rule deseq2:
     input:
-        counts="results/counts/gene_counts.txt",
-	metadata="metadata/samples.csv"
+        counts=f"{RESULTS}/counts/gene_counts.txt",
+        metadata=META
     output:
-        "results/differential_expression/DE_results.csv"
+        de_results=f"{RESULTS}/differential_expression/DE_results.csv",
+        comparison=f"{RESULTS}/differential_expression/comparison.csv",
+        pca=f"{RESULTS}/differential_expression/PCA_conditions.pdf",
+        volcano=f"{RESULTS}/differential_expression/volcano.pdf",
+        heatmap=f"{RESULTS}/differential_expression/heatmap.pdf"
+    params:
+        reference_condition=config["deseq2"]["reference_condition"],
+        comparison_condition=config["deseq2"]["comparison_condition"]
     log:
-        "logs/deseq2.log"
+        f"{LOGS}/deseq2.log"
     script:
-        "scripts/deseq2_analysis.R"
+        f"{SCRIPTS}/deseq2_analysis.R"
+
 
 # -------------------------
 # MultiQC
 # -------------------------
 rule multiqc:
     input:
-        expand("results/qc/raw/{sample}_1_fastqc.zip", sample=SAMPLES),
-        expand("results/qc/raw/{sample}_2_fastqc.zip", sample=SAMPLES),
-        expand("results/qc/trimmed/{sample}_R1.trimmed_fastqc.zip", sample=SAMPLES),
-        expand("results/qc/trimmed/{sample}_R2.trimmed_fastqc.zip", sample=SAMPLES),
-        expand("results/qc/alignment/{sample}.flagstat.txt", sample=SAMPLES),
-        "results/counts/gene_counts.txt"
+        expand(
+            f"{RESULTS}/qc/raw/{{sample}}_1_fastqc.zip",
+            sample=SAMPLES
+        ),
+        expand(
+            f"{RESULTS}/qc/raw/{{sample}}_2_fastqc.zip",
+            sample=SAMPLES
+        ),
+        expand(
+            f"{RESULTS}/qc/trimmed/{{sample}}_R1.trimmed_fastqc.zip",
+            sample=SAMPLES
+        ),
+        expand(
+            f"{RESULTS}/qc/trimmed/{{sample}}_R2.trimmed_fastqc.zip",
+            sample=SAMPLES
+        ),
+        expand(
+            f"{RESULTS}/qc/alignment/{{sample}}.flagstat.txt",
+            sample=SAMPLES
+        ),
+        f"{RESULTS}/counts/gene_counts.txt"
     output:
-        "results/multiqc/multiqc_report.html"
+        f"{RESULTS}/multiqc/multiqc_report.html"
+    log:
+        f"{LOGS}/multiqc.log"
     shell:
         """
-        mkdir -p results/multiqc logs
+        mkdir -p {RESULTS}/multiqc {LOGS}
 
-        multiqc results \
-            -o results/multiqc \
-            > logs/multiqc.log 2>&1
+        multiqc {RESULTS} \
+            --outdir {RESULTS}/multiqc \
+            --filename multiqc_report.html \
+            --force \
+            > {log} 2>&1
         """

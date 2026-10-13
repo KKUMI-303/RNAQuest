@@ -1,0 +1,36 @@
+name: RNA-seq pipeline test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: RNAseq
+          environment-file: environment.yml
+          auto-activate-base: false
+          miniforge-version: latest
+
+      - name: Check environment
+        shell: bash -el {0}
+        run: |
+          conda info
+          snakemake --version
+          hisat2 --version
+          samtools --version
+          fastqc --version
+
+      - name: Run test pipeline
+        shell: bash -el {0}
+        run: |
+          bash tests/scripts/run_tests.sh

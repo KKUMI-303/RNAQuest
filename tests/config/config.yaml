@@ -1,0 +1,17 @@
+reference:
+  genome: tests/data/reference/mini.fa
+  gtf: tests/data/reference/mini.expressed.gtf
+  hisat2_index: tests/data/reference/hisat2_index
+
+paths:
+  raw: tests/data/raw/mock
+  results: tests/results
+  logs: tests/logs
+  metadata: tests/data/metadata.csv
+
+deseq2:
+  reference_condition: ConditionA
+  comparison_condition: ConditionB
+
+scripts:
+  test_script: tests/scripts

@@ -13,7 +13,7 @@ results/alignments/
 results/trimmed/
 data/raw/
 data/trimmed/
-
+tests/results
 # Temporary files
 _STARtmp/
 
