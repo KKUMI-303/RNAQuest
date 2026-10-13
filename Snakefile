@@ -42,7 +42,7 @@ rule fastqc_raw:
         """
         mkdir -p {RESULTS}/qc/raw
         fastqc {input.r1} {input.r2} \
-        -o {RESULTS}/qc/raw \
+        --outdir {RESULTS}/qc/raw \
         --threads {threads}
         """
 
