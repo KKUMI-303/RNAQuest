@@ -19,7 +19,6 @@ dependencies:
   - r-dplyr
   - r-pheatmap
   - r-matrixstats
-  - r-polyester
   - bioconductor-deseq2
   - bioconductor-tximport
   - tree
