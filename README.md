@@ -1,44 +1,94 @@
-# RNAQuest: Mouse RNA-seq Differential Expression Analysis
+# RNAQuest
 
-## Overview
+RNAQuest is a bulk RNA-seq analysis pipeline for mouse transcriptomic data.
 
-RNAQuest is a Snakemake-based pipeline for bulk RNA-seq analysis of mouse transcriptomic data. It processes paired-end sequencing reads through quality control, trimming, genome alignment, gene-level read counting, and differential expression analysis using DESeq2.
+The workflow processes paired-end FASTQ files through quality control, read trimming, genome alignment, gene-level read counting, and differential expression analysis using DESeq2.
 
-The current workflow is designed for a **two-condition differential expression comparison**. The reference and comparison conditions are defined in `config/config.yaml`, while sample identifiers and condition assignments are provided in `metadata/samples.csv`.
+The current workflow is designed to compare two experimental conditions, with the reference and comparison conditions defined in the pipeline configuration.
 
-The pipeline generates quality-control reports, alignment and count files, differential expression results, and visualizations to support downstream interpretation.
+# Features
 
-## Experimental Design
+- Automated RNA-seq analysis using Snakemake
+- Raw read quality control with FastQC
+- Read trimming with Trimmomatic
+- Post-trimming quality control with FastQC
+- Genome alignment using HISAT2
+- BAM sorting and indexing using SAMtools
+- Alignment quality assessment using `samtools flagstat`
+- Gene-level read counting with featureCounts
+- Two-condition differential expression analysis using DESeq2
+- PCA, volcano plot, and heatmap generation
+- Aggregated quality-control reporting with MultiQC
+- Configurable sample metadata and reference files
+- CI testing support using synthetic data and a miniature reference
+- Reproducible Conda-based software environment
 
-The current analysis compares two experimental conditions:
+# Tools Used
 
-| Setting | Description |
+| Step | Tool |
 |---|---|
-| Reference condition | Defined by `deseq2.reference_condition` in the configuration |
-| Comparison condition | Defined by `deseq2.comparison_condition` in the configuration |
-| Sample metadata | `metadata/samples.csv` |
-| Statistical analysis | DESeq2 |
+| Workflow Management | Snakemake |
+| Quality Control | FastQC |
+| Read Trimming | Trimmomatic |
+| Alignment | HISAT2 |
+| BAM Processing | SAMtools |
+| Gene Counting | featureCounts |
+| Differential Expression | DESeq2 |
+| QC Aggregation | MultiQC |
+| Statistical Analysis and Visualization | R |
 
-The number of samples and biological replicates is determined by the metadata file. Ensure that the sample identifiers in the metadata match the corresponding raw FASTQ filenames.
-
-## Project Structure
+# Pipeline Workflow
 
 ```text
+Paired-end FASTQ
+       |
+       v
+FastQC (raw reads)
+       |
+       v
+Trimmomatic
+       |
+       v
+FastQC (trimmed reads)
+       |
+       v
+HISAT2 alignment
+       |
+       v
+SAMtools sort + index
+       |
+       v
+Alignment QC (flagstat)
+       |
+       v
+featureCounts
+       |
+       v
+Gene count matrix
+       |
+       v
+DESeq2 (two-condition comparison)
+       |
+       +-------------------+
+       |         |         |
+       v         v         v
+      PCA     Volcano    Heatmap
+       |
+       v
+MultiQC report
+Project Structure
+text
 RNAQuest/
-├── Snakefile
-├── README.md
+├── .gitignore
 ├── config/
 │   └── config.yaml
-├── environment.yml
+├── data/
+│   ├── adapters/
+│   ├── raw/
+│   ├── reference/
+│   └── trimmed/
 ├── metadata/
 │   └── samples.csv
-├── scripts/
-│   └── deseq2_analysis.R
-├── data/
-│   ├── raw/
-│   ├── trimmed/
-│   ├── reference/
-│   └── adapters/
 ├── results/
 │   ├── qc/
 │   │   ├── raw/
@@ -47,7 +97,8 @@ RNAQuest/
 │   ├── trimmed/
 │   ├── alignments/
 │   ├── counts/
-│   │   └── gene_counts.txt
+│   │   ├── gene_counts.txt
+│   │   └── gene_counts.txt.summary
 │   ├── differential_expression/
 │   │   ├── DE_results.csv
 │   │   ├── comparison.csv
@@ -57,94 +108,96 @@ RNAQuest/
 │   └── multiqc/
 │       └── multiqc_report.html
 ├── logs/
-└── tests/
-    ├── config/
-    ├── data/
-    ├── metadata/
-    ├── results/
-    ├── scripts/
-    │   ├── create_mini_reference.sh
-    │   ├── create_test_dataset.sh
-    │   ├── generate_synthetic_reads.R
-    │   ├── run_tests.sh
-    │   └── validate.py
-    └── workflows
+├── scripts/
+│   └── deseq2_analysis.R
+├── tests/
+│   ├── config/
+│   │   └── config.yaml
+│   ├── data/
+│   │   ├── metadata.csv
+│   │   ├── raw/
+│   │   └── reference/
+│   ├── metadata/
+│   │   └── samples.csv
+│   ├── results/
+│   ├── scripts/
+│   │   ├── create_mini_reference.sh
+│   │   ├── create_test_dataset.sh
+│   │   ├── filter_test_gtf.py
+│   │   ├── filter_transcripts.py
+│   │   ├── generate_synthetic_reads.R
+│   │   ├── run_tests.sh
+│   │   ├── deseq2_analysis.R
+│   │   └── validate.py
+│   └── ...
+├── Snakefile
+├── environment.yml
+├── LICENSE
+└── README.md
 ```
+This is a simplified representation of the project. Reference indexes, intermediate files, logs, and additional test artifacts may also be present during execution.
 
-This tree represents the intended workflow organization. Additional intermediate files, reference indexes, and test artifacts may be present in the working directory.
+## Installation
+Clone the repository and enter the project directory:
 
-## Analysis Workflow
-1. Raw Read Quality Control
+```bash
+git clone https://github.com/yourusername/RNAQuest.git
+cd RNAQuest
+```
+Create the Conda environment:
 
-FastQC evaluates the raw paired-end FASTQ files before trimming.
+```bash
+conda env create -f environment.yml
+```
+Activate the environment:
 
-Outputs are written to:
+```bash
+conda activate RNAseq
+```
+Replace RNAseq if the environment name defined in environment.yml differs.
 
-results/qc/raw/
+## Configuration
+The main configuration file is:
 
-2. Read Trimming
+```text
+config/config.yaml
+```
+It defines the input and output paths, reference genome, annotation file, script paths, and DESeq2 comparison settings.
 
-Trimmomatic removes low-quality regions and trims reads using the following settings:
+The two-condition comparison is configured using:
 
-Sliding-window trimming: SLIDINGWINDOW:4:20
-Minimum read length: MINLEN:50
-Paired-end processing with unpaired reads retained
+```yaml
+deseq2:
+  reference_condition: ...
+  comparison_condition: ...
+```
+Replace the placeholders with the actual condition labels used in the sample metadata.
 
-Outputs are written to:
+Sample information is maintained in:
 
-results/trimmed/
+```text
+metadata/samples.csv
+```
+The Snakefile reads sample identifiers from the sample column. Each sample must have matching paired-end FASTQ files following this naming convention:
 
-3. Post-Trimming Quality Control
+```text
+data/raw/<sample>_1.fastq.gz
+data/raw/<sample>_2.fastq.gz
+```
+Ensure that the sample identifiers and condition labels agree with the configuration and the requirements of the DESeq2 analysis script.
 
-FastQC evaluates the trimmed paired-end reads to assess read quality after preprocessing.
+Run Pipeline
+Production Analysis
+Run the complete workflow from the project root:
 
-Outputs are written to:
+```bash
+snakemake --cores 4
+```
+Replace 4 with the number of CPU cores available.
 
-results/qc/trimmed/
+Snakemake uses the configured sample metadata and workflow dependencies to determine which outputs need to be generated.
 
-4. Genome Alignment
+## License
 
-HISAT2 aligns trimmed reads to the configured mouse reference genome. SAMtools sorts and indexes the resulting BAM files.
+MIT License
 
-Reference genome and annotation paths are defined in config/config.yaml.
-
-The genome reference uses the mouse mm39 assembly when configured accordingly.
-
-Outputs include:
-
-results/alignments/
-
-
-Sorted BAM files and their corresponding BAM indexes are generated for each sample. Alignment statistics are collected using samtools flagstat and stored in:
-
-results/qc/alignment/
-
-5. Gene-Level Read Counting
-
-featureCounts summarizes reads overlapping annotated exons and groups counts by gene_id.
-
-The annotation file is supplied through the pipeline configuration.
-
-Main outputs:
-
-results/counts/gene_counts.txt
-results/counts/gene_counts.txt.summary
-
-6. Differential Expression Analysis
-
-DESeq2 performs differential expression analysis using the two conditions specified in config/config.yaml.
-
-The analysis uses the gene count matrix and sample metadata to estimate expression differences between the reference and comparison conditions.
-
-Outputs:
-
-File	Description
-DE_results.csv	Differential expression results
-comparison.csv	Comparison summary or associated analysis output
-PCA_conditions.pdf	Principal component analysis visualization
-volcano.pdf	Volcano plot of differential expression
-heatmap.pdf	Heatmap visualization
-
-All files are written to:
-
-results/differential_expression/
