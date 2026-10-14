@@ -78,9 +78,9 @@ DESeq2 (two-condition comparison)
 MultiQC report
 ```
 ## Project Structure
+
 ```text
 RNAQuest/
-├── .gitignore
 ├── config/
 │   └── config.yaml
 ├── data/
@@ -121,21 +121,21 @@ RNAQuest/
 │   ├── metadata/
 │   │   └── samples.csv
 │   ├── results/
-│   ├── scripts/
-│   │   ├── create_mini_reference.sh
-│   │   ├── create_test_dataset.sh
-│   │   ├── filter_test_gtf.py
-│   │   ├── filter_transcripts.py
-│   │   ├── generate_synthetic_reads.R
-│   │   ├── run_tests.sh
-│   │   ├── deseq2_analysis.R
-│   │   └── validate.py
-│   └── ...
+│   └── scripts/
+│       ├── create_mini_reference.sh
+│       ├── create_test_dataset.sh
+│       ├── filter_test_gtf.py
+│       ├── filter_transcripts.py
+│       ├── generate_synthetic_reads.R
+│       ├── deseq2_analysis.R
+│       ├── run_tests.sh
+│       └── validate.py
 ├── Snakefile
 ├── environment.yml
 ├── LICENSE
 └── README.md
 ```
+
 This is a simplified representation of the project. Reference indexes, intermediate files, logs, and additional test artifacts may also be present during execution.
 
 ## Installation
