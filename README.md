@@ -76,8 +76,9 @@ DESeq2 (two-condition comparison)
        |
        v
 MultiQC report
-Project Structure
-text
+```
+## Project Structure
+```text
 RNAQuest/
 ├── .gitignore
 ├── config/
