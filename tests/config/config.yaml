@@ -14,4 +14,4 @@ deseq2:
   comparison_condition: ConditionB
 
 scripts:
-  test_script: tests/scripts
+  find_script: tests/scripts

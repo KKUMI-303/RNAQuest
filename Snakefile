@@ -7,7 +7,7 @@ RAW = config["paths"]["raw"]
 RESULTS = config["paths"]["results"]
 LOGS = config["paths"]["logs"]
 META = config["paths"]["metadata"]
-SCRIPTS = config["scripts"]["test_script"]
+SCRIPTS = config["scripts"]["find_script"]
 
 TRANSCRIPTS = config["reference"]["transcripts"]
 SALMON_INDEX = config["reference"]["salmon_index"]
