@@ -24,3 +24,4 @@ dependencies:
   - tree
   - seqtk
   - gffread
+  - salmon

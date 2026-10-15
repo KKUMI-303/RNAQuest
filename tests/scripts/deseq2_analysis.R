@@ -1,42 +1,46 @@
-library(DESeq2)
-library(ggplot2)
-library(pheatmap)
-library(matrixStats)
+suppressPackageStartupMessages({
+  library(tximport)
+  library(DESeq2)
+  library(ggplot2)
+  library(pheatmap)
+  library(matrixStats)
+})
 
+# Inputs from Snakemake
 
-counts_file <- snakemake@input[["counts"]]
+tx2gene_file <- snakemake@input[["tx2gene"]]
 metadata_file <- snakemake@input[["metadata"]]
+
 reference_condition <- snakemake@params[["reference_condition"]]
 comparison_condition <- snakemake@params[["comparison_condition"]]
+
 de_results_file <- snakemake@output[["de_results"]]
 comparison_file <- snakemake@output[["comparison"]]
 pca_file <- snakemake@output[["pca"]]
 volcano_file <- snakemake@output[["volcano"]]
 heatmap_file <- snakemake@output[["heatmap"]]
 
+quant_files <- unlist(snakemake@input[["quant"]])
 
-de_dir <- dirname(snakemake@output[["de_results"]]) 
+sample_ids <- strsplit(
+  snakemake@params[["samples"]],
+  ",",
+  fixed = TRUE
+)[[1]]
 
-dir.create(
-  de_dir,
-  recursive = TRUE,
-  showWarnings = FALSE
-)
+if (length(quant_files) != length(sample_ids)) {
+  stop("Number of Salmon quantification files does not match sample IDs.")
+}
 
-# Load counts
-counts <- read.delim(
-  counts_file,
-  comment.char = "#",
-  row.names = 1,
-  check.names = FALSE
-)
+names(quant_files) <- sample_ids
 
-counts <- counts[, !(colnames(counts) %in%
-  c("Chr", "Start", "End", "Strand", "Length"))]
+de_dir <- dirname(de_results_file)
+dir.create(de_dir, recursive = TRUE, showWarnings = FALSE)
 
-colnames(counts) <- gsub("^.*/", "", colnames(counts))
-colnames(counts) <- sub("\\.sorted\\.bam$", "", colnames(counts))
-counts <- as.matrix(counts)
+# Validate Salmon quantification files
+if (length(quant_files) == 0 || any(!file.exists(quant_files))) {
+  stop("One or more Salmon quant.sf files are missing.")
+}
 
 # Load metadata
 coldata <- read.csv(
@@ -45,53 +49,94 @@ coldata <- read.csv(
   check.names = FALSE
 )
 
-coldata <- coldata[colnames(counts), , drop = FALSE]
+if (anyDuplicated(rownames(coldata))) {
+  stop("Sample IDs in metadata must be unique.")
+}
 
-stopifnot(identical(colnames(counts), rownames(coldata)))
+if (!all(names(quant_files) %in% rownames(coldata))) {
+  stop("A Salmon sample ID is missing from the metadata.")
+}
 
-# Two-condition design
+coldata <- coldata[names(quant_files), , drop = FALSE]
+
+if (!"condition" %in% colnames(coldata)) {
+  stop("Metadata must contain a condition column.")
+}
+
 coldata$condition <- factor(
   coldata$condition,
   levels = c(reference_condition, comparison_condition)
 )
 
-if (any(is.na(coldata$condition))) {
-  stop("Expected conditions: Control and Treatment")
+if (anyNA(coldata$condition)) {
+  stop("Metadata contains unexpected or missing condition labels.")
 }
 
 if (any(table(coldata$condition) < 3)) {
-  stop("Expected 3 biological replicates per condition")
+  stop("Expected at least 3 biological replicates per condition.")
 }
 
-# DESeq2
-dds <- DESeqDataSetFromMatrix(
-  countData = counts,
+# Load transcript-to-gene mapping
+tx2gene <- read.csv(
+  tx2gene_file,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+
+if (!all(c("transcript_id", "gene_id") %in% colnames(tx2gene))) {
+  stop("tx2gene.csv must contain transcript_id and gene_id columns.")
+}
+
+tx2gene <- unique(tx2gene[, c("transcript_id", "gene_id")])
+
+if (
+  anyNA(tx2gene) ||
+  any(tx2gene$transcript_id == "") ||
+  any(tx2gene$gene_id == "")
+) {
+  stop("tx2gene.csv contains missing transcript or gene IDs.")
+}
+
+# Import Salmon estimates and aggregate to genes
+txi <- tximport(
+  quant_files,
+  type = "salmon",
+  tx2gene = tx2gene,
+  countsFromAbundance = "no",
+  dropInfReps = TRUE
+)
+
+# Construct DESeq2 dataset
+dds <- DESeqDataSetFromTximport(
+  txi,
   colData = coldata,
   design = ~ condition
 )
+
+# Remove genes with zero counts across all samples
+dds <- dds[rowSums(counts(dds)) > 0, ]
 
 dds <- DESeq(dds)
 
 res <- results(
   dds,
-  contrast = c("condition", comparison_condition, reference_condition)
+  contrast = c(
+    "condition",
+    comparison_condition,
+    reference_condition
+  )
 )
 
-write.csv(
-  as.data.frame(res),
-  de_results_file
-)
+res_df <- as.data.frame(res)
+res_df$gene_id <- rownames(res_df)
 
+write.csv(res_df, de_results_file, row.names = FALSE)
+write.csv(res_df, comparison_file, row.names = FALSE)
 
-write.csv(
-  as.data.frame(res),
-  comparison_file
-)
-
-# VST
+# Variance-stabilizing transformation
 vsd <- varianceStabilizingTransformation(dds, blind = FALSE)
 
-# PCA
+# PCA plot
 p <- plotPCA(vsd, intgroup = "condition")
 
 ggsave(
@@ -101,33 +146,44 @@ ggsave(
   height = 5
 )
 
-# Volcano
-res_df <- na.omit(as.data.frame(res))
+# Volcano plot
+plot_df <- res_df[
+  !is.na(res_df$log2FoldChange) & !is.na(res_df$pvalue),
+  ,
+  drop = FALSE
+]
 
-pdf(volcano_file)
+pdf(volcano_file, width = 7, height = 5)
 
 print(
-  ggplot(
-    res_df,
-    aes(log2FoldChange, -log10(pvalue))
-  ) +
+  ggplot(plot_df, aes(log2FoldChange, -log10(pvalue))) +
     geom_point(alpha = 0.5) +
-    theme_minimal()
+    theme_minimal() +
+    labs(
+      x = "Log2 fold change",
+      y = "-Log10 p-value",
+      title = paste(comparison_condition, "vs", reference_condition)
+    )
 )
 
 dev.off()
 
-# Heatmap
+# Heatmap of the most variable genes
 sample_order <- order(coldata$condition)
 
 mat <- assay(vsd)[, sample_order, drop = FALSE]
 
-rv <- rowVars(mat)
-select <- order(rv, decreasing = TRUE)[
+rv <- matrixStats::rowVars(mat)
+
+selected <- order(rv, decreasing = TRUE)[
   seq_len(min(500, length(rv)))
 ]
 
-mat <- mat[select, , drop = FALSE]
+mat <- mat[selected, , drop = FALSE]
+
+# Remove constant rows before scaling
+row_sd <- apply(mat, 1, sd)
+mat <- mat[row_sd > 0, , drop = FALSE]
 mat <- t(scale(t(mat)))
 
 annotation_col <- data.frame(

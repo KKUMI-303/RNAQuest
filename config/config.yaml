@@ -1,12 +1,16 @@
 reference:
-  genome: data/reference/genome.fa
-  gtf: data/reference/annotation.gtf
-  hisat2_index: data/reference/hisat2_index
+  transcripts: data/reference/gencode.vM36.transcripts.fa
+  salmon_index: data/reference/salmon_index
+  tx2gene: data/reference/tx2gene.csv
+
+scripts:
+  find_script: deseq2_analysis.R
 
 paths:
-  raw: tests/data/raw/
+  raw: data/raw
   results: results
   logs: logs
+  metadata: metadata/samples.csv
 
 deseq2:
   reference_condition: Condition_A
