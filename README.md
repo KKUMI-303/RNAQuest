@@ -1,25 +1,23 @@
 # RNAQuest
 
-RNAQuest is a bulk RNA-seq analysis pipeline for mouse transcriptomic data.
+RNAQuest is a bulk RNA-seq analysis pipeline for mouse transcriptomic data, built with Snakemake. It processes paired-end FASTQ files through quality control, read trimming, transcript-level quantification with Salmon, and gene-level differential expression analysis using DESeq2 and tximport.
 
-The workflow processes paired-end FASTQ files through quality control, read trimming, genome alignment, gene-level read counting, and differential expression analysis using DESeq2.
+The workflow is configurable through YAML configuration files and sample metadata, with automated quality-control reporting and differential expression visualizations.
 
-The current workflow is designed to compare two experimental conditions, with the reference and comparison conditions defined in the pipeline configuration.
-
+The pipeline is designed to compare two experimental conditions, with the reference and comparison conditions specified in the configuration.
 # Features
 
 - Automated RNA-seq analysis using Snakemake
 - Raw read quality control with FastQC
-- Read trimming with Trimmomatic
+- Paired-end read trimming with Trimmomatic
 - Post-trimming quality control with FastQC
-- Genome alignment using HISAT2
-- BAM sorting and indexing using SAMtools
-- Alignment quality assessment using `samtools flagstat`
-- Gene-level read counting with featureCounts
+- Transcript-level quantification using Salmon
+- Lightweight transcript quantification with selective alignment-based mapping validation
+- Transcript-to-gene summarization using tximport
 - Two-condition differential expression analysis using DESeq2
-- PCA, volcano plot, and heatmap generation
+- Principal component analysis (PCA), volcano plot, and heatmap generation
 - Aggregated quality-control reporting with MultiQC
-- Configurable sample metadata and reference files
+- Configurable sample metadata, transcript references, Salmon indexes, and transcript-to-gene mappings
 - CI testing support using synthetic data and a miniature reference
 - Reproducible Conda-based software environment
 
@@ -30,9 +28,8 @@ The current workflow is designed to compare two experimental conditions, with th
 | Workflow Management | Snakemake |
 | Quality Control | FastQC |
 | Read Trimming | Trimmomatic |
-| Alignment | HISAT2 |
-| BAM Processing | SAMtools |
-| Gene Counting | featureCounts |
+| Transcript Quantification | Salmon |
+| Text-to-Gene Summarization | tximport |
 | Differential Expression | DESeq2 |
 | QC Aggregation | MultiQC |
 | Statistical Analysis and Visualization | R |
@@ -40,43 +37,43 @@ The current workflow is designed to compare two experimental conditions, with th
 # Pipeline Workflow
 
 ```text
-Paired-end FASTQ
-       |
-       v
-FastQC (raw reads)
-       |
-       v
-Trimmomatic
-       |
-       v
-FastQC (trimmed reads)
-       |
-       v
-HISAT2 alignment
-       |
-       v
-SAMtools sort + index
-       |
-       v
-Alignment QC (flagstat)
-       |
-       v
-featureCounts
-       |
-       v
-Gene count matrix
-       |
-       v
-DESeq2 (two-condition comparison)
-       |
-       +-------------------+
-       |         |         |
-       v         v         v
-      PCA     Volcano    Heatmap
-       |
-       v
-MultiQC report
+Paired-end FASTQ files
+          |
+          v
+   FastQC (raw reads)
+          |
+          v
+     Trimmomatic
+          |
+          v
+ FastQC (trimmed reads)
+          |
+          v
+   Salmon quantification
+          |
+          v
+ Transcript-level quant.sf
+          |
+          v
+ tximport: transcript-to-gene
+       summarization
+          |
+          v
+ DESeq2 (two-condition comparison)
+          |
+          +-------------------+
+          |         |         |
+          v         v         v
+         PCA     Volcano    Heatmap
+
+FastQC + Salmon outputs
+          |
+          v
+       MultiQC report
+
 ```
+
+
 ## Project Structure
 
 ```text
@@ -93,13 +90,13 @@ RNAQuest/
 ├── results/
 │   ├── qc/
 │   │   ├── raw/
-│   │   ├── trimmed/
-│   │   └── alignment/
+│   │   └── trimmed/
 │   ├── trimmed/
-│   ├── alignments/
-│   ├── counts/
-│   │   ├── gene_counts.txt
-│   │   └── gene_counts.txt.summary
+│   ├── salmon/
+│   │   └── <sample>/
+│   │       ├── quant.sf
+│   │       └── aux_info/
+│   │           └── meta_info.json
 │   ├── differential_expression/
 │   │   ├── DE_results.csv
 │   │   ├── comparison.csv
@@ -109,6 +106,10 @@ RNAQuest/
 │   └── multiqc/
 │       └── multiqc_report.html
 ├── logs/
+│   ├── salmon_index.log
+│   ├── salmon_quant/
+│   ├── deseq2.log
+│   └── multiqc.log
 ├── scripts/
 │   └── deseq2_analysis.R
 ├── tests/
@@ -135,8 +136,7 @@ RNAQuest/
 ├── LICENSE
 └── README.md
 ```
-
-This is a simplified representation of the project. Reference indexes, intermediate files, logs, and additional test artifacts may also be present during execution.
+Unlike the previous HISAT2-based workflow, the current pipeline uses Salmon to quantify transcript abundance without producing genome-aligned BAM files. Transcript-level estimates are summarized to the gene level using tximport before differential expression analysis with DESeq2.
 
 ## Installation
 Clone the repository and enter the project directory:
@@ -201,4 +201,3 @@ Snakemake uses the configured sample metadata and workflow dependencies to deter
 ## License
 
 MIT License
-
